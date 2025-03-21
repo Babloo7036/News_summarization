@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify,render_template
 import requests
 from bs4 import BeautifulSoup
 from textblob import TextBlob
@@ -7,6 +7,10 @@ import pandas as pd
 import os
 
 app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return render_template('home.html')
 
 # News Extraction Function
 def fetch_news_articles(company_name):
