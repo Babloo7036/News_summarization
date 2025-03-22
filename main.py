@@ -1,35 +1,48 @@
-from flask import Flask, request, jsonify,render_template
+from flask import Flask, request, jsonify
 import requests
 from bs4 import BeautifulSoup
 from textblob import TextBlob
 from gtts import gTTS
 import pandas as pd
 import os
+import uuid
 
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return render_template('home.html')
+    return 'Welcome this is to the News summarization API'
 
 # News Extraction Function
 def fetch_news_articles(company_name):
-    url = f"https://news.google.com/search?q={company_name}"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
+    urls = [
+        f"https://www.bbc.com/search?q={company_name}&page=0",
+        f"https://www.bbc.com/search?q={company_name}&page=1",
+        f"https://www.bbc.com/search?q={company_name}&page=2",
+        f"https://www.bbc.com/search?q={company_name}&page=3",
+        f"https://www.bbc.com/search?q={company_name}&page=4",
+        f"https://www.bbc.com/search?q={company_name}&page=5"
+    ]
     articles = []
-    for item in soup.find_all('article')[:10]:  # Limit to 10 articles
-        title = item.find('a', class_='DY5T1d').text
-        link = "https://news.google.com" + item.find('a', class_='DY5T1d')['href'][1:]
-        summary = item.find('div', class_='Da10Tb').text if item.find('div', class_='Da10Tb') else ""
-        
-        articles.append({
-            "title": title,
-            "link": link,
-            "summary": summary
-        })
-    return articles
+    for url in urls:
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+            for item in soup.find_all('div', class_='sc-c6f6255e-0 eGcloy'):
+                title = item.find('h2').text
+                summary = item.find('div', class_='sc-4ea10043-3 kMizuB').text
+                articles.append({
+                    "Title": title,
+                    "Summary": summary,
+                    "Sentiment": "",
+                    "Topics": []  # Placeholder for topic extraction
+                })
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching {url}: {e}")
+            continue
+
+    return articles[:15]
 
 # Sentiment Analysis Function
 def analyze_sentiment(text):
@@ -43,13 +56,31 @@ def analyze_sentiment(text):
 
 # Comparative Analysis Function
 def comparative_analysis(articles):
-    df = pd.DataFrame(articles)
-    sentiment_counts = df['sentiment'].value_counts()
+    sentiment_counts = {"Positive": 0, "Negative": 0, "Neutral": 0}
+    for article in articles:
+        sentiment_counts[article["Sentiment"]] += 1
     return sentiment_counts
 
+# Generate Comparative Insights
+def generate_comparative_insights(articles):
+    insights = []
+    for i in range(len(articles) - 1):
+        comparison = f"Article {i + 1} highlights {articles[i]['Title']}, while Article {i + 2} discusses {articles[i + 1]['Title']}."
+        impact = f"The first article focuses on {articles[i]['Sentiment']} aspects, while the second highlights {articles[i + 1]['Sentiment']} aspects."
+        insights.append({"Comparison": comparison, "Impact": impact})
+    return insights
+
+# Topic Extraction (Placeholder - Replace with actual topic extraction logic)
+def extract_topics(text):
+    # Placeholder logic for topic extraction
+    topics = ["Electric Vehicles", "Stock Market", "Innovation", "Regulations", "Autonomous Vehicles"]
+    return topics[:2]  # Return 2 random topics for demonstration
+
 # Text-to-Speech (TTS) Function
-def generate_tts(text, output_file="output.mp3"):
-    tts = gTTS(text=text, lang='hi')
+def generate_tts(text, lang='hi'):
+    unique_id = str(uuid.uuid4())
+    output_file = f"output_{unique_id}.mp3"
+    tts = gTTS(text=text, lang=lang)
     tts.save(output_file)
     return output_file
 
@@ -65,16 +96,35 @@ def analyze_news():
     articles = fetch_news_articles(company_name)
     
     for article in articles:
-        article['sentiment'] = analyze_sentiment(article['summary'])
+        article["Sentiment"] = analyze_sentiment(article["Summary"])
+        article["Topics"] = extract_topics(article["Summary"])
     
     sentiment_counts = comparative_analysis(articles)
+    comparative_insights = generate_comparative_insights(articles)
     tts_file = generate_tts(f"कंपनी {company_name} के बारे में समाचार विश्लेषण।")
     
-    return jsonify({
-        "articles": articles,
-        "sentiment_counts": sentiment_counts.to_dict(),
-        "tts_file": tts_file
-    })
+    response = {
+        "Company": company_name,
+        "Articles": articles,
+        "Comparative Sentiment Score": {
+            "Sentiment Distribution": sentiment_counts,
+            "Coverage Differences": comparative_insights,
+            "Topic Overlap": {
+                "Common Topics": list(set(articles[0]["Topics"]).intersection(articles[1]["Topics"])),
+                "Unique Topics in Article 1": list(set(articles[0]["Topics"]).difference(articles[1]["Topics"])),
+                "Unique Topics in Article 2": list(set(articles[1]["Topics"]).difference(articles[0]["Topics"]))
+            }
+        },
+        "Final Sentiment Analysis": f"{company_name}'s latest news coverage is mostly {max(sentiment_counts, key=sentiment_counts.get)}.",
+        "Audio": f"/tts/{tts_file}"
+    }
+    
+    return jsonify(response)
+
+# Serve TTS files
+@app.route('/tts/<filename>')
+def serve_tts(filename):
+    return send_from_directory(os.getcwd(), filename)
 
 # Run the Flask App
 if __name__ == '__main__':
