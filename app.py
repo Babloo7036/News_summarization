@@ -9,7 +9,7 @@ st.title("News Sentiment Analyzer")
 st.write("Enter a company name to analyze news sentiment and get insights.")
 
 # Input for company name
-company_name = st.text_input("Company Name", "Tesla")
+company_name = st.text_input("Company Name",)
 
 if st.button("Analyze"):
     if company_name:
@@ -28,7 +28,8 @@ if st.button("Analyze"):
                 st.write(f"**Title:** {article['Title']}")
                 st.write(f"**Summary:** {article['Summary']}")
                 st.write(f"**Sentiment:** {article['Sentiment']}")
-                st.write(f"**Topics:** {', '.join(article['Topics'])}")
+                st.write(f"**Topics:** {article['key_words']}")
+                st.audio(article["Hindi_Audio"], format="audio/mp3")
                 st.write("---")
             
             # Comparative Sentiment Score
@@ -40,18 +41,13 @@ if st.button("Analyze"):
                 st.write(f"- **Comparison:** {insight['Comparison']}")
                 st.write(f"- **Impact:** {insight['Impact']}")
             
-            st.write("**Topic Overlap:**")
-            st.write(f"- **Common Topics:** {', '.join(data['Comparative Sentiment Score']['Topic Overlap']['Common Topics'])}")
-            st.write(f"- **Unique Topics in Article 1:** {', '.join(data['Comparative Sentiment Score']['Topic Overlap']['Unique Topics in Article 1'])}")
-            st.write(f"- **Unique Topics in Article 2:** {', '.join(data['Comparative Sentiment Score']['Topic Overlap']['Unique Topics in Article 2'])}")
-            
             # Final Sentiment Analysis
             st.subheader("Final Sentiment Analysis")
             st.write(data["Final Sentiment Analysis"])
             
             # Audio
-            st.subheader("Audio Summary")
-            st.audio(data["Audio"], format="audio/mp3")
+            # st.subheader("Audio Summary")
+            # st.audio(data["Audio"], format="audio/mp3")
         else:
             st.error(f"Error: {response.json().get('error', 'Unknown error')}")
     else:
