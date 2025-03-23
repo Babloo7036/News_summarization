@@ -9,7 +9,7 @@ import uuid
 from googletrans import Translator
 from keybert import KeyBERT
 from flask_cors import CORS
-
+from translate import Translator
 
 app = Flask(__name__)
 
@@ -89,8 +89,8 @@ def extract_keywords(text):
 # Function to translate text to Hindi and generate speech
 def generate_hindi_audio(text):
     try:
-        translator = Translator()
-        translated_text = translator.translate(text, src="en", dest="hi").text
+        translator = Translator(to_lang="hi")
+        translated_text = translator.translate(text)
         
         if not os.path.exists('static'):
             os.makedirs('static')
@@ -100,7 +100,6 @@ def generate_hindi_audio(text):
         tts = gTTS(text=translated_text, lang="hi")
         tts.save(audio_path)
         
-        # Return the full URL to access the audio file
         return f"http://127.0.0.1:5000/tts/{audio_filename}"
     except Exception as e:
         print(f"Error in translation or audio generation: {e}")
