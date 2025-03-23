@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 import requests
 from bs4 import BeautifulSoup
 from textblob import TextBlob
@@ -34,20 +34,22 @@ def fetch_news_articles(company_name):
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
             for item in soup.find_all('div', class_='sc-c6f6255e-0 eGcloy'):
-                title = item.find('h2').text
-                summary = item.find('div', class_='sc-4ea10043-3 kMizuB').text
-                articles.append({
-                    "Title": title,
-                    "Summary": summary,
-                    "Sentiment": "",
-                    "Topics": []  # Placeholder for topic extraction
-                })
+                title_element = item.find('h2')
+                summary_element = item.find('div', class_='sc-4ea10043-3 kMizuB')
+                if title_element and summary_element:
+                    title = title_element.text
+                    summary = summary_element.text
+                    articles.append({
+                        "Title": title,
+                        "Summary": summary,
+                        "Sentiment": "",
+                        "Topics": []  # Placeholder for topic extraction
+                    })
         except requests.exceptions.RequestException as e:
             print(f"Error fetching {url}: {e}")
             continue
     
     return articles[:15]
-
 
 # Sentiment Analysis Function
 def analyze_sentiment(text):
@@ -68,6 +70,8 @@ def comparative_analysis(articles):
 
 # Generate Comparative Insights
 def generate_comparative_insights(articles):
+    if len(articles) < 2:
+        return []
     insights = []
     for i in range(len(articles) - 1):
         comparison = f"Article {i + 1} highlights {articles[i]['Title']}, while Article {i + 2} discusses {articles[i + 1]['Title']}."
@@ -75,63 +79,76 @@ def generate_comparative_insights(articles):
         insights.append({"Comparison": comparison, "Impact": impact})
     return insights
 
-#Extracting important keywords
+# Extracting important keywords
 def extract_keywords(text):
-        keywords = kw_model.extract_keywords(text, keyphrase_ngram_range=(1, 2), stop_words='english', top_n=3)
-        return [keyword for keyword, score in keywords]
+    keywords = kw_model.extract_keywords(text, keyphrase_ngram_range=(1, 2), stop_words='english', top_n=3)
+    return [keyword for keyword, score in keywords]
 
 # Function to translate text to Hindi and generate speech
 def generate_hindi_audio(text):
-    translator = Translator()
-    translated_text = translator.translate(text, src="en", dest="hi").text
-    
-    audio_filename = f"static/{uuid.uuid4()}.mp3"
-    tts = gTTS(text=translated_text, lang="hi")
-    tts.save(audio_filename)
-    
-    return audio_filename
+    try:
+        translator = Translator()
+        translated_text = translator.translate(text, src="en", dest="hi").text
+        
+        if not os.path.exists('static'):
+            os.makedirs('static')
+        
+        audio_filename = f"static/{uuid.uuid4()}.mp3"
+        tts = gTTS(text=translated_text, lang="hi")
+        tts.save(audio_filename)
+        
+        return audio_filename
+    except Exception as e:
+        print(f"Error in translation or audio generation: {e}")
+        return None
 
 # API Endpoint
 @app.route('/analyze-news', methods=['POST'])
 def analyze_news():
-    data = request.json
-    company_name = data.get('company_name')
-    
-    if not company_name:
-        return jsonify({"error": "Company name is required"}), 400
-    
-    articles = fetch_news_articles(company_name)
-    
-    for article in articles:
-        article["Sentiment"] = analyze_sentiment(article["Summary"])
-        article["key_words"] = extract_keywords(article["Summary"])
-        article["Hindi_Audio"] = generate_hindi_audio(article["Summary"])
-    
-    sentiment_counts = comparative_analysis(articles)
-    comparative_insights = generate_comparative_insights(articles)
-    
-    response = {
-        "Company": company_name,
-        "Articles": articles,
-        "Comparative Sentiment Score": {
-            "Sentiment Distribution": sentiment_counts,
-            "Coverage Differences": comparative_insights,
-            "Topic Overlap": {
-                "Common Topics": list(set(articles[0]["Topics"]).intersection(articles[1]["Topics"])),
-                "Unique Topics in Article 1": list(set(articles[0]["Topics"]).difference(articles[1]["Topics"])),
-                "Unique Topics in Article 2": list(set(articles[1]["Topics"]).difference(articles[0]["Topics"]))
-            }
-        },
-        "Final Sentiment Analysis": f"{company_name}'s latest news coverage is mostly {max(sentiment_counts, key=sentiment_counts.get)}.",
-    }
-    
-    return jsonify(response)
+    try:
+        data = request.json
+        company_name = data.get('company_name')
+        
+        if not company_name:
+            return jsonify({"error": "Company name is required"}), 400
+        
+        articles = fetch_news_articles(company_name)
+        
+        if not articles:
+            return jsonify({"error": "No articles found"}), 404
+        
+        for article in articles:
+            article["Sentiment"] = analyze_sentiment(article["Summary"])
+            article["key_words"] = extract_keywords(article["Summary"])
+            article["Hindi_Audio"] = generate_hindi_audio(article["Summary"])
+        
+        sentiment_counts = comparative_analysis(articles)
+        comparative_insights = generate_comparative_insights(articles)
+        
+        response = {
+            "Company": company_name,
+            "Articles": articles,
+            "Comparative Sentiment Score": {
+                "Sentiment Distribution": sentiment_counts,
+                "Coverage Differences": comparative_insights,
+                "Topic Overlap": {
+                    "Common Topics": list(set(articles[0]["Topics"]).intersection(articles[1]["Topics"])),
+                    "Unique Topics in Article 1": list(set(articles[0]["Topics"]).difference(articles[1]["Topics"])),
+                    "Unique Topics in Article 2": list(set(articles[1]["Topics"]).difference(articles[0]["Topics"]))
+                }
+            },
+            "Final Sentiment Analysis": f"{company_name}'s latest news coverage is mostly {max(sentiment_counts, key=sentiment_counts.get)}.",
+        }
+        
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # Serve TTS files
 @app.route('/tts/<filename>')
 def serve_tts(filename):
-    return send_from_directory(os.getcwd(), filename)
+    return send_from_directory('static', filename)
 
 # Run the Flask App
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
