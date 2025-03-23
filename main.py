@@ -6,7 +6,6 @@ from gtts import gTTS
 import pandas as pd
 import os
 import uuid
-from googletrans import Translator
 from keybert import KeyBERT
 from flask_cors import CORS
 from translate import Translator
