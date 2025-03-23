@@ -10,6 +10,7 @@ from googletrans import Translator
 from keybert import KeyBERT
 from flask_cors import CORS
 
+
 app = Flask(__name__)
 
 kw_model = KeyBERT()
@@ -94,15 +95,16 @@ def generate_hindi_audio(text):
         if not os.path.exists('static'):
             os.makedirs('static')
         
-        audio_filename = f"static/{uuid.uuid4()}.mp3"
+        audio_filename = f"{uuid.uuid4()}.mp3"
+        audio_path = os.path.join('static', audio_filename)
         tts = gTTS(text=translated_text, lang="hi")
-        tts.save(audio_filename)
+        tts.save(audio_path)
         
-        return audio_filename
+        # Return the full URL to access the audio file
+        return f"http://127.0.0.1:5000/tts/{audio_filename}"
     except Exception as e:
         print(f"Error in translation or audio generation: {e}")
         return None
-
 # API Endpoint
 @app.route('/analyze-news', methods=['POST'])
 def analyze_news():
