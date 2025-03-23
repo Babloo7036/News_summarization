@@ -8,6 +8,7 @@ import os
 import uuid
 from googletrans import Translator
 from keybert import KeyBERT
+from flask_cors import CORS
 
 app = Flask(__name__)
 
